@@ -1,0 +1,595 @@
+Tworzenie biblioteki.so - shared object
+gcc lib_asm.o lib_gcd.o -shared -o lib.so
+LD_LIBRARY_PATH=. ./gcd 10 10 - odpalanie z biblioteka
+export LD_LIBRARY_PATH=.  - nwm, robi ogolnie doestpene czy cos
+
+
+
+argumenty funkcji C w asm - kolejnosc: %rdi, %esi, %edx, %ecx
+
+linkowanie z C: gcc file.o -o file -no-pie
+
+
+
+ilip-rak@filiprak:~/Desktop/asm/Idk$ gcc -c pr.c -o pr.o
+filip-rak@filiprak:~/Desktop/asm/Idk$ as lib_asm.s -o lib_asm.o
+filip-rak@filiprak:~/Desktop/asm/Idk$ as lib_gcd.s -o lib_gcd.o
+filip-rak@filiprak:~/Desktop/asm/Idk$ gcc pr.o lib_asm.o lib_gcd.o -o gcd
+filip-rak@filiprak:~/Desktop/asm/Idk$ gcc pr.o lib_asm.o lib_gcd.o -o gcd -no-pie
+
+
+kolokwium:
+wywolaj funkcje, wywolaj printf, zrob petle, swicth case? 
+
+
+Typy danych
+
+.int 5
+.long 5
+.string "text"
+.ascii "text"
+.asciz "text"
+.space 10
+
+
+Wskazniki:
+
+add $1, %edi
+przesuniecie edi o jeden bit w prawo
+sub $1, %edi
+
+$zmienna: .long 1,6  - przykladowo
+
+mov $zmienna, %edi - wstawianie adresu zmienna do edi
+mov (%edi), %esi - przeniesienie wartosci na jaka wskazuje edi do esi
+mov 4(%edi), %esi - przesuniecie tej wartosci o 4 bity, jednego inta
+
+
+mov $text, %r8  - do r8 wrzucam adres zmiennej text
+movb $' ', 4(%r8)  - zmieniam piaty znak w text na spacje
+
+
+
+laczenie pliku
+.include "nazwa_pliku.s"
+
+w pliku naglowkowym mamy tylko sekcje: data, text i nazwy funkcji
+inne rzeczy nie powinny sie powtarzac
+kompilejmy poprzez kompilowanie execa, nie obchodzi nas naglowkowy w kompilacji
+
+
+KODY:
+
+Petla:
+###############
+.global _start
+.data
+	text: .ascii "MROZON\n"
+	length: .long 7
+.text
+_start:
+	mov $0, %r8
+	call loop1
+	call exit
+	
+loop1:
+	mov $1, %eax
+	mov $1, %edi
+	mov $text, %esi
+	mov length, %edx
+	syscall
+	
+	add $1, %r8
+	cmp $5, %r8
+	jnz loop1
+	
+exit:
+	mov $60, %eax
+	mov $0, %edi
+	syscall
+	
+##################
+Include
+.data
+	text: .ascii "Hello\n"
+	length: .long 6
+.text
+
+hello:
+	mov $1, %eax
+	mov $1, %edi
+	mov $text, %esi
+	mov length, %edx
+	syscall
+	ret
+####################
+
+
+
+
+
+UZYWANIE PRINTF'a
+as args.s -o args.o
+gcc args.o -o args -no-pie
+#################
+.global main
+.data
+	text: .string "%d %d"
+	a: .long 5
+	b: .long 10
+.text
+main:
+	mov $text, %rdi
+	mov a, %esi
+	mov b, %edx
+	xor %eax, %eax
+	sub $8,%rsp
+	
+	
+	call printf
+	
+	add $8, %rsp
+	
+	ret
+
+
+
+printf ale tym razem przyjmuje argument z konsoli
+w rejestrze %edi znajduje sie ilosc przekazanych parametrow
+w rejeestrze %rsi znajduja sie przekazane parametry, pierwszym z nich jest nazwa programu, czyli %rsi to nazwa(?)(wydaje sie byc w innym formacie)
+przesuniecie o 8 bitow to pierwszy arg
+####################
+.global main
+.data
+	text: .string "%s\n"
+	a: .long 5
+.text
+main:
+	mov $text, %rdi
+	#mov a, %rsi
+	mov 8(%rsi), %rsi
+	xor %eax, %eax
+	sub $8,%rsp
+	
+	
+	call printf
+	
+	add $8, %rsp
+	
+	ret
+
+
+
+Uzywanie atoi z wyswietleniem wyniku printf'em
+wynik dzialania atoi jest wstawiony do rax / eax - zalezne od wielkosci!
+#####################
+.global main
+.data
+	format: .string "%d\n"
+	a: .long 5
+.text
+main:
+	xor %eax, %eax #zerowanie %eax - wymagane zawsze
+
+	mov 8(%rsi), %rdi #atoi
+	call atoi
+	mov %eax, a
+	
+	mov $format, %rdi #printf
+	mov a, %rsi
+	sub $8, %rsp #uzupelnienie stosu?
+	call printf
+	
+	add $8, %rsp  #tak
+	ret
+
+
+SUper giga program zawansowany
+najpierw bierze input z konsoli, dwie zmienne
+konwertuje na liczby przy pomocy atoi
+przekazuje customowej funkcji z C obie liczby, zwraca ich sume
+wynik jest wypisany printf'em
+#####################################
+.global main
+.extern sum
+.data
+	arg_1: .long 0
+	arg_2: .long 0
+	result: .long 0
+	
+	format: .string "Sum = %d\n"
+.text
+main:
+	xor %rax, %rax  #setup
+	sub $8, %rsp
+	mov %rsi, %rbx
+	
+	mov 8(%rbx), %rdi  #atoi
+	call atoi
+	mov %eax, arg_1
+	
+	mov 16(%rbx), %rdi
+	call atoi
+	mov %rax, arg_2
+	
+	mov arg_1, %rdi   #sum
+	mov arg_2, %rsi
+	call sum
+	mov %eax, result
+	
+	mov $format, %rdi  #printf
+	mov result, %rsi
+	call printf
+	
+	add $8, %rsp  #restore stack pointer
+	ret
+
+
+
+#include <stdlib.h>
+#include <stdio.h>
+
+int sum(int a, int b)
+{
+	return a - b;
+}
+
+
+
+
+
+
+
+Uzywa funckji z C, ktora wypisuje text w petli x razy
+###############################
+.global main
+.data 
+	text: .space 10
+	number: .int 0
+	#format: .string "%s\n"
+.text
+main:
+	xor %eax, %eax	#preparation
+	mov %rsi, %rbx
+	sub $8, %rsp
+	
+	mov 8(%rbx), %rax  #get text
+	mov %rax, text
+	
+	mov 16(%rbx), %rdi  #get number
+	call atoi
+	mov %rax, number
+	
+	mov text, %rdi	#call loop
+	mov number, %rsi
+	call loop
+	
+	add $8, %rsp
+	ret
+	
+	
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+
+void loop(char* a, int b)
+{
+	for(int i = 0; i < b; i++){
+		printf("%d. %s\n", i+1, a);
+		sleep(1);
+	}
+}
+
+
+
+
+
+Sprawdzanie max liczby funkcja w C
+####################################
+.global main
+.data
+	arg_1: .int 0
+	arg_2: .int 0
+	arg_3: .int 0
+	
+	result: .int 0
+	format: .string "Max = %d\n"
+.text
+main:
+
+	cmp $4, %edi 		#exit if not enough args
+	jne exit
+	
+	mov %rsi, %rbx  	#setup
+	xor %eax, %eax
+	sub $8, %rsp
+	
+	mov 8(%rbx), %rdi  	#atoi 1
+	call atoi
+	mov %rax, arg_1
+	
+	mov 16(%rbx), %rdi	#atoi 2
+	call atoi
+	mov %rax, arg_2
+	
+	mov 24(%rbx), %rdi	#atoi 3
+	call atoi
+	mov %rax, arg_3
+	
+	mov arg_1, %rdi		#max
+	mov arg_1, %rsi
+	mov arg_1, %rdx
+	call max
+	mov %eax, result
+	
+	mov $format, %rdi	#printf
+	mov result, %rsi
+	call printf
+	
+	
+	add $8, %rsp	
+	
+exit:
+	ret
+
+
+
+
+
+
+
+rozwiazanie na zaliczenie
+#########################
+.global main
+.text
+main:
+	sub $8, %rsp
+	call exec
+	add $8, %rsp
+	
+exit:
+	ret
+
+
+
+
+
+#include <stdio.h>
+#include <stdlib.h>
+
+void exec()
+{
+	printf("int: ");
+	
+	int a  = 0;
+	scanf("%d", &a);
+	
+	printf("%d^2 = %d\n", a, a*a);
+}
+
+
+
+
+
+
+
+
+
+
+switch
+wazne: wewntrz funckji uzywam jmp, nie call - inaczej powoduje segmentation fault
+#################################
+.global main
+.text
+	format: .string "%d\n"
+main:
+
+	mov 8(%rsi), %rdi
+	call atoi
+	
+	cmp $1, %rax
+	je c1
+	cmp $2, %rax
+	je c2
+	cmp $3, %rax
+	je c3
+	jne c_default
+	
+	
+		
+c1:
+	mov $1, %rsi
+	jmp exit
+	
+c2:
+	mov $2, %rsi
+	jmp exit
+	
+c3:
+	mov $3, %rsi
+	jmp exit
+	
+c_default:
+	mov $4, %rsi
+	jmp exit
+	
+	
+exit:
+	sub $8, %rsp
+
+	mov $format, %rdi
+	call printf
+	
+	add $8, %rsp
+	
+	
+	ret
+	
+	
+przesuwanie tablicy	
+########################
+.global main
+.data
+	tab: .long 5, 4, 3, 2
+	format: .string "%d\n"
+.text
+main:
+	sub $8, %rsp
+
+	mov 8(%rsi), %rdi
+	call atoi
+	
+	mov tab(,%rax, 4), %rsi
+	
+	mov $format, %rdi
+	call printf
+	
+	
+	add $8, %rsp
+	ret
+	
+	
+#mov mov arr(,indeks, bajty), cel;	
+
+
+
+
+
+
+
+
+Zadanie do mrozona
+.global main
+.data
+	tab: .long 5, 4, 3, 2
+	format: .string "%d\n"
+.text
+main:
+	sub $8, %rsp 	#prep
+		
+	cmp $2, %edi	#sprawdza czy ilosc arg ok
+	jne exit
+
+	mov 8(%rsi), %rdi	#bierze arg z rsi i konwertuje na liczbe
+	call atoi
+	
+	cmp $4, %rax	#sprsawdza czy indeks nie jest za duzy
+	jge exit
+		
+	cmp $0, %rax
+	jl exit
+	
+	mov tab(,%rax, 4), %rsi	#przechodzi do tab[%rax] i zapisuje %rsi
+	
+	mov $format, %rdi	#wypisz tab[%rax]
+	call printf
+
+	
+exit:
+
+	add $8, %rsp
+	ret
+	
+	
+#mov mov arr(,indeks, bajty), cel;
+#mov mov arr(,indeks, bajty), cel;
+
+
+
+
+
+
+przekazywanie tablicy do C
+###############################
+.global main
+.data
+	arr: .long 1, 2, 3
+	size: .int 3
+.text
+main:
+	sub $8, %rsp
+	
+	mov $arr, %rdi	#przekazujemy wskaznik, nie wartosc - dlatego dolar
+	mov size, %rsi
+	call func
+	
+	add $8, %rsp
+	ret
+	
+	
+.global main
+.data
+	arr: .long 1, 2, 3
+	size: .int 3
+.text
+main:
+	sub $8, %rsp
+	
+	mov $arr, %rdi	#przekazujemy wskaznik, nie wartosc - dlatego dolar
+	mov size, %rsi
+	call func
+	
+	add $8, %rsp
+	ret
+
+
+
+
+
+
+
+
+
+
+
+
+//ZMIENNE ZMIENNOPRZECINMKOWE FPU ASEMBLER LESSS GOOOOO (mrozon)
+//i shot my wiff
+
+
+
+
+
+# 1) Wykonaj dzialanie sqrt(2.0) * sqrt(2.0) - 2.0
+flds 	f_2 	#st(0) = 2  | wrzuca f_2 na stos
+fsqrt  		#pierwiastkuje st(0), wynik zapisuje w st(0) - nadpisuje
+flds 	f_2 	#st(0) = 2.0, st(1) = sqrt(2.0)
+fsqrt 		#st(0) = sqrt(2.0), st(1) = sqrt(2.0)
+fmulp		#mnozy st(0) z st(1), wynik zapisuje w st(1) | p oznacza ze popuje stos - wynik bedzie w st(0)
+flds	f_2	#st(0) = 2.0, st(1) = sqrt(2.0) * sqrt(2.0)
+fsubp		#st(0) - st(1), pop st(0), roznica bedzie w st(0);
+
+
+
+Procedura do pobierania czasu zwraca 3 wartosci
+UWAGA: fsubstr ma odwrotna skladnie do dodawania i dzielenia
+
+
+gcc -c eval_time.c -o eval_time.o -O3
+filip-rak@filiprak:~/Desktop/asm$ as 10_2.s -o 10_2.o
+filip-rak@filiprak:~/Desktop/asm$ gcc 10_2.o eval_time.o -o 10_2 -no-pie
+
+//orw 0x0[]00  [] = precyzja
+
+
+
+
+
+mrozon cos wyjasnil w notatkach jednak
+
+	# Ustaw sposob zaokraglania, bity 14 i 13:
+	# 00 round to nearest
+	# 01 round down toward –INF
+	# 10 round up toward +INF
+	# 11 round toward zero or truncate
+
+	stmxcsr	mxcsr
+	andl	$0xFFFF9FFF , mxcsr
+	orl	$0x00000000 , mxcsr
+	ldmxcsr	mxcsr
+
+
+
+
+DO KOlOKWIUM:
+
