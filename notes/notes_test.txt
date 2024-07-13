@@ -1,0 +1,647 @@
+SSE w C
+	#include <x86intrin.h>	 <<----- bilbioteka
+
+	Caly sens SSE polega na tym aby ograniczyc czas wczytywania. Zamiast wczytywac a do procesora i mnozyc je przez c a potem wczytwac b i mnozyc je przez c
+	SSE pozwala nam na wczytanie a i b jednoczesnie. Zaoszczedzamy polowe czasu jaki stracilisbysmy na wczytywaniu (+-)
+	
+	zmienne:
+	__m128d	
+		__m - oznacza media
+		128 - wielkosc rejestru (256, 512, prawdopodobnie jeszcze jakies inne ale nie wiem)
+		d - double (i - int, brak = float)
+		
+		
+		
+	polecenia:
+	wszytkie polecenia zwracaja wartosc, zwyjatkiem tych gdzie pisze, ze nie
+	w nazwach pd oznacza double (64bit), ph half float (16bit), s float (32bit)
+	
+	__m128d	_mm_load_pd(double* ) - 	przyjmuje adres do double, najlepiej do tablicy
+						jak damy jej np. arr[5], to sobie wezmie arr[5] i arr[6] bo funkcja bierze 128 bit, a double ma 64, czyli funkcja bierze 2
+						zwraca nam rejestr z tymi dwoma double
+	__m128d _mm_set1_pd(double, double)		przyjmuje dwie liczby, nie wskaznik
+	__m128d	_mm_load1_pd(double* )		to co powyzej ale bierze jednego double i go sobie zapisuje 2 razy
+	__m128d _mm_add_pd(__m128d, _m128d)	przyjmuje dwa rejestry i je dodaje (a do a b do b), zwraca wynik dodawania
+	_mm_store_pd(double*, __m128d)		zapisuje do wskazanej tablicy(arg1) wartosci z rejestr (arg2), nie zwraca wartosci. sd - zwraca jedna wartosc, nie floata, ps zwraca floata
+						p zamiast s zwraca pojedyncza, pierwsza wartosc 
+	a = _mm_mul_pd(__m128d, __m128d);			mnozenie
+	a = _mm_div_pd(a, b);			dzielenie
+	_mm_neg_pd(a)				negacja
+	_mm_sqrt_pd(a)				pierwiastek kwadratowy
+	_mm_sin_pd 				Oblicza sinus dla dwóch wartości double znajdujących się w rejestrze SIMD i zwraca wynik również w postaci rejestrów SIMD.
+    	_mm_cos_pd 				Oblicza cosinus dla dwóch wartości double znajdujących się w rejestrze SIMD i zwraca wynik również w postaci rejestrów SIMD.
+    	_mm_sincos_pd 				Oblicza zarówno sinus, jak i cosinus dla dwóch wartości double znajdujących się w rejestrze SIMD i zwraca wyniki również w postaci rejestrów SIMD.
+
+
+FPU:
+
+	jezeli chcemy skonwertowac liczbe z konsoli na zmiennoprzecinkowa to musimy urzyc funkcji strtod z C. Jedynym arg. jaki musimy podac to adres do stringa (arg1)
+	ale lepiej wyzerowac %rsi, bo tam nie chcemy miec innego, drugi argument ma byc pusty w tej dunkcji bo chcemy by uzyla wartosci defualtowej
+	
+	xor %rsi, %rsi
+	mov $input, %rdi
+	call strtod
+	movsd %xmm0, x
+	
+	%xmm0 - tu bedzie zwracany wynik zmiennoprzecinkowy
+	jak wywolujemy funkcje to w rejestrze %rax pieszemy ile xmmow bedziemy uzywac, to informacja do C
+	trzeba pamietac o tym, ze po wywolaniu dowolnej funkcji %rax bedzie stracone
+	
+	FPU zapamietuje swoje wartosci przy wywolywaniu procedur (funkcji C chyba tez)
+	
+	
+	
+	Przy wywoywaniu funkcji z C kolejki argumentow sa osobne
+	zmiennoprzecinkowe do %xmm
+	inne do rdi, rsi, rdx, rcx, r8, r9
+	w sytuacji gdzie mamy fucnkje np (double, int, double, int)
+	tak dziwnie pomieszane, double ida do xmm a wszystko inne do rejestrow jak powyzej
+	czyli double %xmm0, double2 do %xmm1, int1 do %rdi, int2 do %rsi
+	wskaniki nie ida do xmm, tylko do normalnych
+	
+	
+	!!!USTAWIANIE CONTROL WORD FPU!!!
+	
+	finit				#defaultujemy FPU
+	fstcw cw 			#zapisujemy ustawienia FPU do zmiennej cw -> cw: .word 0
+	movw $0b0000001101111111, cw	#zapisujemy nowe control word do cw. Instrukcja robienia control word nizej
+	fldcw cw			#wczytujemy control word z cw do FPU	
+	
+	
+	
+	0b0000001101111111	<--- defaultowe cw
+	0b0000000001111111	<--- ta sobie edytuj
+	--xxxXRCPCxxpuozdi
+
+	legenda - kapitalizacja ma znaczenie:
+
+	x - zarezerwowane, nawet nie probuj zmieniac
+	X - infinity control 
+	RC - zaokraglanie: See Section 4.8.4.1. - w manualu jaki dal mrozon nie ma takiej sekcji
+
+	PC - precyzja: 
+		00 - pojedyncza precyzja(24 bit, float)
+		01 - reserved (??????)
+		10 - podwojna precyzja(53 bit, double?)
+		11 - podwojna rozszerzona precyzja(64 bit, double?)
+		
+	ustawienia do masek: 1 - maskuje(nie ma bledu widocznego), 0 - nie maskuje (floating point exception). To jest powiazane z bledami
+		p - maska precyzji
+		u - maska underflow
+		o - maska overflow
+		z - maska dzielenia przez zero
+		d - maska niestandardowej operacji? (denormal mask)
+		i - maska niepoprawnej operacji
+		
+	
+	
+	POLECENIA FPU
+	Ogolnie to argumentem moze byc albo stos, albo rejestr (%xmm) albo wartosc stala lub zmienna, ale nie koniecznie bedzie dzialac na kazde polecenie
+	capslock opcjonalny
+	
+	
+	finit 		#restartuje wszystkie ustawienia FPU oraz czysci jego rejestry
+	FLD value1	#wczytuje value1 na stos ST(0). Ponowne uzycie przesunie wszystko na st(+1) i wczyta na ST(0). Dziala
+	FMUL value2	#mnozy ST(0) przez value2, wynik zapisywany w ST(0). Dziala
+	FADD %ST(1)	#Do wartosci w ST(0) zostanie dodana wartosc w st(1). Dziala
+	FSUB %ST(1)	#Od wartosci w ST(0) odejmie ST(1). Dziala
+	FDIV value1 	#Dzieli ST(0) przez value1, wynik w ST(0). Dziala
+	FSQRT 		#Liczy pierwiastek z ST(0) i zapisuje w ST(0). Dziala
+	FCHS		#Zmienia znak wartosci w ST(0). Dziala
+	FCMP %ST(1)	#Porownuje st(0) z ST(0) i ustawia flage jak sie zgadzaja
+	FCOM / FUCOM 	#cos podobnego
+	FABS 		#Oblicza wartosc bezwzgledna ST(0) i nadpisuje. Dziala
+	FST zmienna	#Zapisuje wartosc z ST(0) do zmiennej. kurwa chuj wie raz dziala raz nie, pierdolony assembler. Dla double dopisz L dla float S. P mowi czy sicagnie czy nie
+	FISTPS 		#Zapisuje ST(0) do zmiennej ale jako liczbe calkowita. Zapisuje sie tylko do inta, i zaokragla weflug zasad przewidzianych w masce. maska jest zjebana
+	FLDZ		#Wczytuje 0.0 do ST(0). dziala
+	FLDPI		#Wczytuje PI, na pewno jest wiecej takich ale nie wiem. dziala
+	FWAIT 		#Czeka z wykonywaniem kolejnych polecen az FPU skonczy liczyc
+	FXCH %st(1)		#Zamienia st(0) z podanym innym stackiem
+	
+	jak chcemy cos wladowac do %xmm to musimy uzywac movss lub movsd, mozliwe ze jakichs innych tez
+		
+	
+	
+	Przyrostki polecen, czyli FLDS lub FLDD np, zaleznie od tego jaki typ danych uzywamy, jezeli odnosimy sie do %st() to chyba bez przedrostka, ale nwm. Bartek pewnie tylko wie
+	
+	Brak przyrostka: 
+		Podwojna precyzja / double  / 64-bit
+	s:
+		pojedyncza precyzja / float / 32-bit
+	d a czasami l, zalezy od chuj wie czego:	
+		Podwojna precyzja / double  / 64-bit
+	t:	
+		Nie wiem / 80-bit??????
+		
+	r: zmienia kolejnosc dzialania, bo normalna kolejnosc jest zjebana, a nowa jest tez zjebana
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+#########################nie wiem nawet	
+.global main
+.data			       
+	x: .float 3.141592653589
+	result: .float 0.0
+	
+	format: .string "%lf\n"
+.text
+main:
+	flds x
+	fsqrt
+	fstps result
+
+	sub $8, %rsp	
+	
+	mov $format, %rdi
+	movss result, %xmm0
+	cvtss2sd %xmm0 , %xmm0
+	mov $1, %eax
+	call printf
+	
+	add $8, %rsp
+	
+ret
+
+
+
+############################  Bierze liczbe zmiennoprzecinkowa z konsoli, konwertuje i wypisuje
+.global main
+.data
+	x: .double 5
+	format: .string "%lf\n"
+.text
+main:
+	
+	mov 8(%rsi), %rdi
+	
+	sub $8, %rsp
+
+	call strtod
+	movsd %xmm0, x
+
+	
+	mov $format, %rdi
+	mov $1, %eax
+	movsd x, %xmm0
+	call printf
+	
+	add $8, %rsp
+	
+	
+ret
+
+
+
+################ swietny kod, dziala i wgl. wczytuje a i liczy pierwiastek z tego, zapisuje wynik do wynik. Piekny kod bo wynikiem jest wynik a nie 0. Bardzo trudno o taki kod
+.global main
+.data
+	a: .double 1.5
+	b: .double 0.5
+	
+	wynik:	.double 8
+	
+	format: .string "%lf\n"
+.text
+main:
+	finit
+	
+	FLDL a	#ST(0) = a
+	FSQRT #ST(0) = a + b
+	FSTPL wynik
+	
+	sub $8 ,%rsp
+	
+	mov $format, %rdi
+	mov $1, %rax
+	movsd wynik, %xmm0
+	call printf
+	
+	add $8, %rsp
+	
+ret
+
+
+
+##dzialajaca petla - niemozliwe
+.global main
+.data
+	a: .double 1.0
+	
+	wynik:	.double 8.0
+	
+	format: .string "%lf\n"
+.text
+main:
+    	finit
+	fld1	
+	
+	mov $5, %rcx
+	
+for:   
+	faddl a
+
+	dec	%rcx
+	jnz	for  
+	
+	
+	
+	
+exit:
+	fstpl wynik
+	
+    	sub $8, %rsp
+    	
+    	mov $format, %rdi
+    	mov $1, %eax
+    	movsd wynik, %xmm0
+    	call printf
+    
+    	add $8, %rsp
+    	
+    	mov $0, %eax
+    ret
+    
+    
+    
+    
+    
+ ################### delta   
+    
+    .global main
+.data
+	a: .double 1.0
+	b: .double 5.0
+	c: .double -4.0
+	
+	multi: .double 4
+	
+	wynik:	.double 8.0
+	format: .string "%lf\n"
+.text
+main:
+	finit
+	
+	fldl b
+	fmull b		#st(0) = bb
+	
+	fldl a		#st(0) = a st(1) = bb
+	fmull c		#st(0) = ac st(1) = bb
+	fmull multi	#st(0) = 4ac st(1) = bb
+	
+	fsubr %st(1), %st(0)	#st(0) = bb - 4ac 
+	
+	fstpl wynik
+
+
+
+	
+    	sub $8, %rsp
+    	
+    	mov $format, %rdi
+    	mov $1, %eax
+    	movsd wynik, %xmm0
+    	call printf
+    
+    	add $8, %rsp
+ret
+
+
+
+
+
+###################################delta full program z x1 i x2 i xo i niczym
+
+.global main
+.data
+	a: 	.double 5.0
+	b: 	.double 2.0
+	c: 	.double -1.0
+	
+	four:	.double 4
+	two:	.double 2
+	zero:	.double 0.0
+	
+	delta:	.double 8.0
+	x1:	.double 0
+	x2:	.double 0
+	
+	format1: .string "Brak wynikow\n"
+	format2: .string "Jeden wynik: x0 = %lf\n"
+	format3: .string "Dwa wyniki: x1 = %lf, x2 = %lf\n"
+
+.text
+main:
+	finit
+	
+	fldl b
+	fmull b		#st(0) = bb
+	
+	fldl a		#st(0) = a st(1) = bb
+	fmull c		#st(0) = ac st(1) = bb
+	fmull four	#st(0) = 4ac st(1) = bb
+	
+	fsubr %st(1), %st(0)	#st(0) = bb - 4ac 
+	
+	fstpl delta	#zapisz delte
+	fldl delta	#zaloz delte na stos
+	
+	fcompl zero	#sprawdza czy st(0) jest rowne zero, zdejmuje delte ze stosu, niestety
+	fstsw %ax	
+	sahf		#kopiowanie flagi z fpu, ^ tez
+	
+	
+	jb below	#skoki warunkowe
+	jg above
+	je equal
+
+		
+below:
+	mov $format1, %rdi
+	jmp exit_if
+	
+equal:
+	fldl b		#st(0) = b
+	fchs		#st(0) = -b
+	fldl a		#st(0) = a st(1) = -b
+	fmull two	#st(0) = 2a, st(1) -b
+	fdivrp %st(0), %st(1)	#st(0) = -b/2a  st(1)..st(2)...
+	
+	fstpl x1
+	mov $format2, %rdi
+	mov $1, %rax
+	movsd x1, %xmm0
+	
+	jmp exit_if
+
+above:
+	fldl delta	#delta = st(0)
+	fsqrt		#st(0) = sqrt(delta)
+	fldl b		#st(0) = b, st(1) = sqrt(delta)
+	fchs		#st(0) = -b, st(1) = sqrt(delta)
+	fsub %st(0), %st(1)	#st(0) = sqrt(delta), st(1) = -b-sqrt(delta)
+	fxch %st(1)	#st(0) = -b-sqrt(delta), st(1) = sqrt(delta)
+	fldl a		#st(0) = a, st(1) = -b-sqrt(delta), st(2) = sqrt(delta)
+	fmull two	#st(0) = 2a, st(1) = -b-sqrt(delta), st(2) = sqrt(delta)
+	fxch %st(1)	#st(0) = -b-sqrt(delta), st(1) = 2a, st(2) = sqrt(delta)
+	fdiv %st(1)	#st(0) = x1, st(1) = 2a, st(2) = sqrt(delta)
+	fstpl x1	#st(0) = 2a, st(1) = sqrt(delta)
+	
+	
+	fldl delta	#delta = st(0)
+	fsqrt		#st(0) = sqrt(delta)
+	fldl b		#st(0) = b, st(1) = sqrt(delta)
+	fchs		#st(0) = -b, st(1) = sqrt(delta)
+	fadd %st(0), %st(1)	#st(0) = sqrt(delta), st(1) = -b-sqrt(delta)
+	fxch %st(1)	#st(0) = -b-sqrt(delta), st(1) = sqrt(delta)
+	fldl a		#st(0) = a, st(1) = -b-sqrt(delta), st(2) = sqrt(delta)
+	fmull two	#st(0) = 2a, st(1) = -b-sqrt(delta), st(2) = sqrt(delta)
+	fxch %st(1)	#st(0) = -b-sqrt(delta), st(1) = 2a, st(2) = sqrt(delta)
+	fdiv %st(1)	#st(0) = x1, st(1) = 2a, st(2) = sqrt(delta)
+	fstpl x2	#st(0) = 2a, st(1) = sqrt(delta)
+	
+
+	mov $format3, %rdi
+	mov $2, %rax
+	movsd x1, %xmm0
+	movsd x2, %xmm1
+	
+	jmp exit_if
+
+
+exit_if:
+    	sub $8, %rsp
+    	call printf
+    	add $8, %rsp
+ret
+
+
+
+
+
+
+
+
+
+
+
+
+############################################delta co powyzej, ale z inputem z konsoli
+.global main
+.data
+	a: 	.double 5.0
+	b: 	.double 2.0
+	c: 	.double -1.0
+	
+	four:	.double 4
+	two:	.double 2
+	zero:	.double 0.0
+	
+	delta:	.double 8.0
+	x1:	.double 0
+	x2:	.double 0
+	
+	format1: .string "Brak wynikow\n"
+	format2: .string "Jeden wynik: x0 = %lf\n"
+	format3: .string "Dwa wyniki: x1 = %lf, x2 = %lf\n"
+
+.text
+main:				#wczytywanie arg z konsoli
+	mov %rsi, %rbx		#skopiuj rsi do rbx, zeby funkcja nie usunela
+	sub $8, %rsp
+	
+	xor %rsi, %rsi		#przed wywolaniem strtod trzeba wyczyscic 2-gi argument, bo drugi to powinien byc NULL / 0
+	mov 8(%rbx), %rdi
+	call strtod
+	movsd %xmm0, a		#wynik z funkcji zmiennoprzecinkowej jest zwracany w %xmm0, movsd do przenoszenia double, movss do floata. Z tym sie lepiej nie mylic
+	
+	xor %rsi, %rsi
+	mov 16(%rbx), %rdi
+	call strtod
+	movsd %xmm0, b
+	
+	xor %rsi, %rsi
+	mov 24(%rbx), %rdi
+	call strtod
+	movsd %xmm0, c
+	
+	
+			#liczenie delty
+	finit
+	
+	fldl b
+	fmull b		#st(0) = bb
+	
+	fldl a		#st(0) = a st(1) = bb
+	fmull c		#st(0) = ac st(1) = bb
+	fmull four	#st(0) = 4ac st(1) = bb
+	
+	fsubr %st(1), %st(0)	#st(0) = bb - 4ac 
+	
+	fstpl delta	#zapisz delte
+	fldl delta	#zaloz delte na stos
+	
+	fcompl zero	#sprawdza czy st(0) jest rowne zero, zdejmuje delte ze stosu, niestety
+	fstsw %ax	
+	sahf		#kopiowanie flagi z fpu, ^ tez
+	
+	
+	jb below	#skoki warunkowe
+	jg above
+	je equal
+
+		
+below:	#delta ujemna
+	mov $format1, %rdi
+	jmp exit_if
+	
+equal:	#tylko x0
+	fldl b		#st(0) = b
+	fchs		#st(0) = -b
+	fldl a		#st(0) = a st(1) = -b
+	fmull two	#st(0) = 2a, st(1) -b
+	fdivrp %st(0), %st(1)	#st(0) = -b/2a  st(1)..st(2)...
+	
+	fstpl x1
+	mov $format2, %rdi
+	mov $1, %rax
+	movsd x1, %xmm0
+	
+	jmp exit_if
+
+above:	#x0 i x1
+	fldl delta	#delta = st(0)
+	fsqrt		#st(0) = sqrt(delta)
+	fldl b		#st(0) = b, st(1) = sqrt(delta)
+	fchs		#st(0) = -b, st(1) = sqrt(delta)
+	fsub %st(0), %st(1)	#st(0) = sqrt(delta), st(1) = -b-sqrt(delta)
+	fxch %st(1)	#st(0) = -b-sqrt(delta), st(1) = sqrt(delta)
+	fldl a		#st(0) = a, st(1) = -b-sqrt(delta), st(2) = sqrt(delta)
+	fmull two	#st(0) = 2a, st(1) = -b-sqrt(delta), st(2) = sqrt(delta)
+	fxch %st(1)	#st(0) = -b-sqrt(delta), st(1) = 2a, st(2) = sqrt(delta)
+	fdiv %st(1)	#st(0) = x1, st(1) = 2a, st(2) = sqrt(delta)
+	fstpl x1	#st(0) = 2a, st(1) = sqrt(delta)
+	
+	
+	fldl delta	#delta = st(0)
+	fsqrt		#st(0) = sqrt(delta)
+	fldl b		#st(0) = b, st(1) = sqrt(delta)
+	fchs		#st(0) = -b, st(1) = sqrt(delta)
+	fadd %st(0), %st(1)	#st(0) = sqrt(delta), st(1) = -b+sqrt(delta)
+	fxch %st(1)	#st(0) = -b+sqrt(delta), st(1) = sqrt(delta)
+	fldl a		#st(0) = a, st(1) = -b+sqrt(delta), st(2) = sqrt(delta)
+	fmull two	#st(0) = 2a, st(1) = -b+sqrt(delta), st(2) = sqrt(delta)
+	fxch %st(1)	#st(0) = -b+sqrt(delta), st(1) = 2a, st(2) = sqrt(delta)
+	fdiv %st(1)	#st(0) = x2, st(1) = 2a, st(2) = sqrt(delta)
+	fstpl x2	#st(0) = 2a, st(1) = sqrt(delta)
+	
+
+	mov $format3, %rdi
+	mov $2, %rax
+	movsd x1, %xmm0
+	movsd x2, %xmm1
+	
+	jmp exit_if
+
+
+exit_if:
+    	call printf
+    	add $8, %rsp
+ret
+
+
+
+
+##################################### podanie tablicy double do funkcji w C
+.global main
+.data
+	arr: .double 0.0, 1.0, 2.0	
+.text
+main:
+	mov $arr, %rdi
+	mov $3, %rsi
+	
+	sub $8, %rsp
+	call exec
+	add $8, %rsp
+	
+	ret
+	
+	
+#############################
+.global main
+.data
+	cw: 	.word 	0
+	a: 	.float	2.0
+	b: 	.float	0
+	
+	
+	wynik:	.float 	0
+	
+	format:	.string	"%f\n"
+.text
+main:
+	finit				#defaultujemy FPU
+	fstcw cw 			#zapisujemy ustawienia FPU do zmiennej cw -> cw: .word 0
+	#movw $0b0000001101111111, cw	#zapisujemy nowa maske do cw. Instrukcja robienia maski nizej
+	fldcw cw			#wczytujemy maske z cw do FPU	
+	
+	flds a
+	fdivs b
+	fstps wynik
+	
+	
+	sub $8, %rsp
+	mov $format, %rdi
+	mov $1, %rax
+	movss wynik, %xmm0
+	cvtss2sd %xmm0, %xmm0
+	call printf
+	
+	
+	add $8, %rsp
+	
+	ret
+
+
+
+//////////////////////////////Jakies podstawy z SSE
+#include <stdio.h>
+#include <x86intrin.h>	//ta biblioteka wazna
+
+int main()
+{
+
+	float arr[] = {8, 16, 32, 64, 128};		//tablica floatow
+	int size = sizeof(arr) / sizeof(float);		//licze wielkosc tablicy, nie potrzebne w praktyce
+	
+	__m128 r1 = _mm_load_ps(arr);	//wczytuje floaty z tablicy do 128-bitowego rejestru 128 / 32 = 4. W reg zapisza sie 4 floaty
+	__m128 r2 = _mm_set1_ps(4);	//ustawiamy rejestr na r2 na 4. 1 w funkcji oznacza, ze rejestr bedzie nimi wypelniony. Czyli mamy cztery czworki
+	
+	r1 = _mm_div_ps(r1, r2);	//podziel r1 przez r2 czyli 8 zostanie podzielone przez 4, 16 podzielone przez kolejna liczbe z r2 = 4, 32 bedzie podzielone przez 4.. i 64 przez sqrt(16) tj. 4
+	r1 = _mm_sqrt_ps(r1);		//liczy pierwiastki z r1, zapisuje do r1
+	
+	
+	_mm_store_ps(arr, r1);		//zapisujemy r1 w arr. 128 / 32 = 4 -> tyle licz zapisze do arr, tj. zastapi pierwsze 4
+	
+	
+	
+	
+	 for(int i = 0; i < size; i++)	//wypisuje cala tablice arr. Zwroc uwage na to, ze 128 pozostaje 128, bo jest piate
+	 	printf("%lf\n", arr[i]);
+
+}
+
+
