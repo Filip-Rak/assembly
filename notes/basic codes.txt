@@ -1,0 +1,367 @@
+###########################################podstawy jakies
+.global main
+.data
+	a:	.float 	0.5
+	b:	.float	2.2
+	
+	wynik:	.float	0.0
+	three:	.float	3.0
+	
+	format:	.string	"%f\n"
+	
+.text
+main:
+	
+	#FPU
+	
+	flds a	#st(0) = a
+	flds b 	#st(0) = b, st(1) = a
+	fldpi	#st(0) = pi, st(1) = b, st(2) = a
+	fsqrt	#st(0) = sqrt(pi), st(1) = b, st(2) = a
+	fsts wynik 	#wynik = sqrt(pi)  st(0) = sqrt(pi), st(1) = b, st(2) = a
+
+	fmuls wynik	#wynik = sqrt(pi)  st(0) = pi, st(1) = b, st(2) = a
+	fsubs three	##wynik = sqrt(pi)  st(0) = pi - 3, st(1) = b, st(2) = a
+	
+	
+	
+	
+	fstps wynik	#wynik = pi,  st(0) = b, st(1) = a
+	
+	
+	
+
+	#Wypisywanie
+	
+	sub $8, %rsp
+	
+	mov $format, %rdi	#printf("%f\n", wynik);
+	mov $1, %rax
+	movss wynik, %xmm0
+	cvtss2sd %xmm0, %xmm0
+	call printf
+	
+	add $8, %rsp
+	
+	ret
+	
+	
+	
+##########   delta + double
+.global main
+.data
+	a:	.double 	1.0
+	b:	.double		5.0
+	c:	.double		4.0
+	
+	wynik:	.double		0.0
+	
+	four:	.double		4.0
+	format:	.string	"%lf\n"
+	
+.text
+main:
+	
+				#FPU bb - 4ac
+	
+	fldl c			#st(0) = c
+	fldl a			#st(0) = a st(1) = c
+	fmull four 		#st(0) = 4a, st(1) = c
+	fmul %st(1), %st(0)	#st(0) = 4ac, st(1) = c
+	fldl b			#st(0) = b st(1) = 4ac, st(2) = c
+	fmull b			#st(0) = bb, st(1) = 4ac, st(2) = c
+	fsub %st(1)		#st(0) = delta, st(1) = 4ac, st(2) = c
+	
+	
+	fstl wynik		#wynik = delta st(0) = delta, st(1) = 4ac, st(2) = c
+	
+	
+
+				
+	
+	sub $8, %rsp		#Wypisywanie
+	
+	mov $format, %rdi	#printf("%f\n", wynik);
+	mov $1, %rax
+	movsd wynik, %xmm0
+	call printf
+	
+	add $8, %rsp
+	
+	ret
+	
+	
+	
+	
+########################### konwersja
+.global main
+.data
+	wynik:	.double		0.0
+	format:	.string	"%lf\n"
+.text
+main:
+	mov %rsi, %rbx
+			
+			
+	sub $8, %rsp	
+	
+	
+	mov 8(%rbx), %rdi	#strtod(char*, NULL)
+	xor %rsi, %rsi
+	call strtod
+	movsd %xmm0, wynik
+	
+	
+	mov 16(%rbx), %rdi	#strtod(char*, NULL)
+	xor %rsi, %rsi
+	call strtod
+	movsd %xmm0, wynik
+	
+				#Wypisywanie
+	
+	mov $format, %rdi	#printf("%f\n", wynik);
+	mov $1, %rax
+	movsd wynik, %xmm0
+	call printf
+	
+	add $8, %rsp
+	
+	ret
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+###Finkcje
+
+.global main
+.data
+	arr: .double 1.0, 2.0
+	wynik:	.double 0
+	format:	.string	"%lf\n"
+.text
+main:
+	sub $8, %rsp
+	mov $arr, %rdi
+	mov $2, %rsi
+	call exec
+	movsd %xmm0, wynik
+	
+	
+	
+	mov $format, %rdi	#printf("%f\n", wynik);
+	mov $1, %rax
+	movsd wynik, %xmm0
+	call printf
+	
+	
+	add $8, %rsp
+	
+	ret
+	
+	
+	
+#include <stdio.h>
+
+double exec(double* arr, int size)
+{
+	double sum = 0;	
+	for(int i = 0; i < size; i++)
+		sum += arr[i];
+		
+	return sum;
+}
+	
+	
+	
+	
+	
+	
+	
+#include <stdio.h>
+#include <x86intrin.h>	
+
+int main()
+{
+	float arr[] = {25, 4, 16, 64, 100, 81};
+	int size = sizeof(arr) / sizeof(float);
+	
+	__m128 reg = _mm_load_ps(arr);		//128 / 32 = 4
+	reg = _mm_sqrt_ps(reg);
+	_mm_store_ps(arr, reg);
+	
+	
+	for(int i = 0; i < size; i++)
+		printf("%lf\n", arr[i]);
+}
+
+
+
+######################## tablica , tak
+
+
+.global main
+.data
+	arr: .double 1.0, 2.0
+	wynik:	.double 0
+	format:	.string	"%lf\n"
+.text
+main:
+	mov $arr, %esi
+	fldl 8(%esi)
+
+	fstl wynik
+
+	
+	sub $8, %rsp
+	mov $format, %rdi	#printf("%f\n", wynik);
+	mov $1, %rax
+	movsd wynik, %xmm0
+	call printf
+	
+	
+	add $8, %rsp
+	
+	ret
+	
+	
+	
+	
+	.globl	main
+.data
+	# Wartosc poczatkowe zmiennych
+	mass:		.double	0.0
+	height:		.double	0.0
+	bmi:		.double	0.0
+
+	cw:		.word 0
+
+	outstr:	.string "BMI = %lf\n"
+.text
+main:
+	finit
+	
+	# Ustaw podwojna precyzje obliczen, wylacz wyjatki
+	fstcw	cw
+	movw $0b0000001101111111, cw
+	fldcw	cw
+
+	sub	$8,%rsp	
+	
+	mov %rsi, %rbx		#wczytywanie
+	
+	mov 8(%rbx), %rdi
+	xor %rsi, %rsi
+	call strtod
+	movsd %xmm0, height
+	
+	
+	mov 16(%rbx), %rdi
+	xor %rsi, %rsi
+	call strtod
+	movsd %xmm0, mass
+	
+		
+	
+	# Oblicz BMI
+	# bmi = mass / height^2
+	
+	fldl height	#st(0) = height
+	fmull height	#st(0) = height^2
+	fldl mass	#st(0) = mass, st(1) = height^2
+	fdiv %st(1)	#st(0) = mass / height^2, st(1) = height^2
+	
+	fstpl bmi	#bmi = mass / height^2
+	# Zapisz BMI i wydrukuj jego wartosc (jako double).
+	
+	mov $outstr, %rdi
+	mov $1, %rax
+	movsd bmi, %xmm0
+	call	printf
+
+	add	$8,%rsp
+	ret
+
+		
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	##############
+	.globl	main
+
+.data
+
+# Wartosc poczatkowa temperatury (Tf) oraz niezbedne stale.
+
+Tf:		.float	50.0
+Tc:		.float	0.0
+c59:		.float	0.55555555555555
+c32:		.float	32.0
+
+cw:		.word 0
+
+outstr:	.string "Tc = %f\n"
+
+.text
+
+main:
+
+sub	$8,%rsp
+
+# Wlacz FPU, ustaw pojedyncza precyzje obliczen, wylacz wyjatki
+	finit				
+	fstcw cw 			
+	movw $0b0000000001111111, cw	
+	fldcw cw			
+	
+# Przelicz stopnie F (Tf) na stopnie C (Tc).
+# Tc = 5/9 * (Tf - 32.0)
+
+	flds Tf		#st(0) = tf
+	fsubs c32	#st(0) = tf-32
+	fmuls c59	#st(0) = 5/9 * (tf-32)
+	
+# Zapisz Tc i wydrukuj wartosc (jako float).
+	fsts Tc
+	
+	mov $outstr, %rdi
+	mov $1, %rax
+	movsd Tc, %xmm0
+	cvtss2sd %xmm0, %xmm0
+	call printf
+
+
+add	$8,%rsp
+ret
+
+
+
+
+#as file.s -o file.o
+# gcc file.o -o file
+#./file
